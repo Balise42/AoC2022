@@ -3,12 +3,58 @@ import * as rd from 'readline'
 
 var reader = rd.createInterface(fs.createReadStream("D:\\Home\\projects\\adventcalendar\\2022\\data\\day09.txt"))
 
-var th = 0;
-var tv = 0;
-var hh = 0;
-var hv = 0;
+class RopeKnot {
+    public h = 0;
+    public v = 0;
 
-var posTail = new Set<String>();
+    public follow( other : RopeKnot ) {
+        if ( Math.abs(other.h - this.h) <= 1 && Math.abs(other.v - this.v) <= 1 ) {
+            return;
+        }
+    
+        if ( other.v !== this.v) {
+            this.v += (other.v - this.v)/Math.abs(other.v - this.v);
+        }
+        if ( other.h !== this.h ) {
+            this.h += (other.h - this.h)/Math.abs(other.h - this.h);    
+        }
+    }
+
+    public toString(): string {
+        return this.h + ' # ' + this.v;
+    }
+}
+
+class Rope {
+    public knots = new Array<RopeKnot>();
+    public posTails = new Set<String>();
+
+    public constructor( numKnots : number ) {
+        for ( var i = 0; i < numKnots; i++ ) {
+            this.knots.push(new RopeKnot());
+        }
+        this.posTails.add( this.knots[numKnots - 1].toString() );
+    }
+
+    public moveHead( dir : string ) {
+        if ( dir === 'U' ) {
+            this.knots[0].v -= 1;
+        } else if ( dir === 'D' ) {
+            this.knots[0].v += 1;
+        } else if ( dir === 'L' ) {
+            this.knots[0].h -= 1;
+        } else if (dir === 'R' ) {
+            this.knots[0].h +=1;
+        }
+        for ( var i = 1; i < this.knots.length; i++ ) {
+            this.knots[i].follow(this.knots[i-1]);
+        }
+        this.posTails.add( this.knots[this.knots.length - 1].toString());
+    }
+}
+
+var ropePart1 = new Rope(2);
+var ropePart2 = new Rope(10);
 
 reader.on("line", (l: string) => {
     const toks = l.split(' ');
@@ -16,37 +62,13 @@ reader.on("line", (l: string) => {
     const amount = parseInt(toks[1]);
 
     for ( var i = 0; i < amount; i++ ) {
-        if ( dir === 'U' ) {
-            tv -= 1;
-        } else if ( dir === 'D' ) {
-            tv += 1;
-        } else if ( dir === 'L' ) {
-            th -= 1;
-        } else if (dir === 'R' ) {
-            th +=1;
-        }
-
-        updateTail();
+        ropePart1.moveHead( dir );
+        ropePart2.moveHead( dir );
     }
 });
 
-function updateTail() {
-    if ( Math.abs(th - hh) <= 1 && Math.abs(tv - hv) <= 1 ) {
-        return;
-    }
-
-    if ( tv !== hv) {
-        hv += (tv - hv)/Math.abs(tv - hv);
-    }
-    if ( th !== hh ) {
-        hh += (th - hh)/Math.abs(th - hh);    
-    }
-
-
-    posTail.add( hh + ' # ' + hv );
-}
 
 reader.on('close', () => {
-    posTail.add('0 # 0');
-    console.log(posTail.size);
+    console.log(ropePart1.posTails.size);
+    console.log(ropePart2.posTails.size);
 });
