@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "@types/node": "^18.11.10"
+  },
+  "dependencies": {
+    "heap": "^0.2.7"
   }
 }

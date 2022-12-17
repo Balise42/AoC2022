@@ -20,6 +20,16 @@ function getHighest() : number {
     throw "Didn't find the highest point";
 }
 
+function getLine( y: number ) : string {
+    if ( y < 0) {
+        return '#######';
+    }
+    let res : string = '';
+    for ( let i = 0; i < 7; i++) {
+        res = res + (grid[i][y] === 0 ? '.' : '#');
+    }
+    return res;
+}
 class Polyomino {
     // Types: -, +, L, I, o
     public type : string;
@@ -190,9 +200,14 @@ reader.on('close', () => {
     const types = ['-', '+', 'L', 'I', 'o'];
 
     let commandIndex = 0;
-
-    for ( let i = 0; i < 2022; i++ ) {
-        const rock = new Polyomino( types[i % 5] );
+    let memoIt = new Map<string, number>();
+    let memoHeight = new Map<string, number>();
+    let cycleStart = -1;
+    let cycleLength = -1;
+    let heightCycle = -1;
+    let heights = [0];
+    for ( let i = 1; i <= 2022; i++ ) {
+        const rock = new Polyomino( types[(i-1) % 5] );
         while ( true ) {
             let command = commands[commandIndex % commands.length];
             commandIndex++;
@@ -205,7 +220,40 @@ reader.on('close', () => {
                 break;
             }
         }
+        var highest = getHighest();
+        heights.push( highest );
+        var key = '';
+        for ( let k = 0; k < 10; k++) {
+            key +=  getLine(highest - k);
+        }
+        key += rock.type;
+        key += commandIndex % commands.length;
+        
+        if ( memoIt.has(key) ) {
+            cycleStart = memoIt.get(key);
+            cycleLength = i - memoIt.get(key);
+            heightCycle = highest - memoHeight.get(key);
+            break;
+        } else {
+            memoIt.set(key, i);
+            memoHeight.set(key, highest);
+        }
     }
 
-    console.log( getHighest());
+    let heightpart1 = heights[cycleStart];
+    let numCycles1 = Math.floor((2022-cycleStart) / cycleLength);
+    heightpart1 += numCycles1 * heightCycle;
+    let leftoverpart1 = 2022 - cycleStart - cycleLength * numCycles1;
+    heightpart1 += heights[(cycleStart + leftoverpart1)] - heights[cycleStart];
+
+    console.log( heightpart1 );
+
+    let height: bigint = BigInt(heights[cycleStart]);
+    let numCycles = BigInt(1000000000000-cycleStart) / BigInt(cycleLength);
+    height += numCycles * BigInt(heightCycle);
+
+    let leftOverOps =  Number(BigInt(1000000000000) - BigInt( cycleStart ) - BigInt(cycleLength) * numCycles);
+    height += BigInt(heights[ (cycleStart + leftOverOps) ] - heights[cycleStart]);
+
+    console.log(height);
 });
