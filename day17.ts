@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import { stringify } from 'querystring';
 import * as rd from 'readline'
 
 const reader : rd.Interface = rd.createInterface(fs.createReadStream("D:\\Home\\projects\\adventcalendar\\2022\\data\\day17.txt"))
