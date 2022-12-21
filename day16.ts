@@ -1,8 +1,6 @@
 import * as fs from 'fs';
 import * as rd from 'readline'
 
-var Heap = require('heap');
-
 var reader = rd.createInterface(fs.createReadStream("D:\\Home\\projects\\adventcalendar\\2022\\data\\day16.txt"))
 
 class ValveRoom {
@@ -24,29 +22,58 @@ class RoomConfig {
     public open = new Map<string, number>();
     public timeSpentMe = 0;
     public timeSpentEle = 0;
+    private keyCache = '';
 
-    public totalFlowToTime() : number {
+    public totalFlowToTime( time : number) : number {
         let res = 0;
         for ( const valve of this.open ) {
-            if ( valve[1] > Math.min(this.timeSpentMe, this.timeSpentEle) || valve[1] > 30) {
+            if ( valve[1] > time || valve[1] > 30) {
                 continue;
             }
-            res += (Math.min(this.timeSpentMe, this.timeSpentEle) - valve[1]) * graph.get(valve[0]).flow;
+            res += (time- valve[1]) * graph.get(valve[0]).flow;
         }
         return res;
     }
 
     public maxObtainable() : number {
-        const timeLeft = 30 - Math.min(this.timeSpentMe, this.timeSpentEle);
-        return this.totalFlowToTime() + maxFlowPerTick * timeLeft;
+        let minDate = Math.min(this.timeSpentMe, this.timeSpentEle);
+        const timeLeft = 30 - minDate;
+        return this.totalFlowToTime( minDate ) + maxFlowPerTick * timeLeft - Math.ceil((numValves - this.open.size)/2);
     }
 
     public key() : string {
-        return this.posMe + this.posEle + this.timeSpentMe + ' ' + this.timeSpentEle + new Array(...this.open.keys()).sort().join();
+        let key = this.keyCache;
+        if (key !== '') {
+            return key;
+        }
+        if ( this.open.size < numValves ) {
+           /* if ( this.timeSpentEle < this.timeSpentMe ) {
+                key = 'POS(' + this.posEle + ' ' + this.timeSpentEle + ' ' + this.posMe + ' ' + this.timeSpentMe + ') '
+            } else {
+                key = 'POS(' + this.posMe + ' ' + this.timeSpentMe + ' ' + this.posEle + ' ' + this.timeSpentEle + ') '
+            }*/
+        }
+        const keys = new Array(...this.open.keys()).sort();
+        for ( const k of keys ) {
+            key += k + ' ' + this.open.get(k) + ' ';
+        }
+        key += Math.min( this.timeSpentEle, this.timeSpentMe ) + ' ' + Math.max( this.timeSpentEle, this.timeSpentMe );
+        this.keyCache = key;
+        return key;
+    }
+
+    public sortByPotential( vertices ) : [] {
+        return vertices.sort( (a, b) => {
+           if ( this.open.has(a) || a === 'AA' ) {
+            return 1;
+           }
+           if ( this.open.has(b) || b === 'AA' ) {
+            return -1;
+           }
+           return graph.get(a).flow < graph.get(b).flow ? 1 : -1;
+        });
     }
 }
-
-const initrc = new RoomConfig();
 
 reader.on("line", (l: string) => {
     const groups = l.match(valveRegex);
@@ -83,133 +110,111 @@ function simplifyGraph() {
     } while (!stable);
 }
 
+var maxFound = 0;
+var maxConfig = null;
+
 reader.on('close', () => {
 
     simplifyGraph();
+    maxFound = 0;
+    const initrc1 = new RoomConfig();
+    initrc1.timeSpentEle = 30;
+    initrc1.timeSpentMe = 0;
+    console.log(runProcess( initrc1 ));
 
-    runProcess( 0, 30 );
-    runProcess( 4, 4 );
-    
+    const initrc2 = new RoomConfig();
+    initrc2.timeSpentEle = 4;
+    initrc2.timeSpentMe = 4;
+    console.log(runProcess(initrc2));
 });
 
-function runProcess( timeMe, timeEle ) {
-    let currMax = 0;
-    let queue = new Heap( (a : RoomConfig, b : RoomConfig) => b.open.size- a.open.size); 
-    initrc.timeSpentMe = timeMe;
-    initrc.timeSpentEle = timeEle;
-    queue.push( initrc );
-    while (queue.size() > 0) {
-        //console.log( queue.size() + " " + currMax);
-        var config : RoomConfig = queue.pop();
-        if (cache.has( config.key())) {
-            continue;
-        }
-        cache.set(config.key(), 1);
-        const total = config.totalFlowToTime();
-        if ( total > currMax && Math.min(config.timeSpentMe, config.timeSpentEle) <= 30 ) {
-            currMax = total;
-        }
 
 
-        if ( Math.min(config.timeSpentMe, config.timeSpentEle) >= 30 ) {
-            continue;
-        }
+function runProcess( config : RoomConfig ) : number {
+    if ( cache.has( config.key()) ) {
+        return cache.get(config.key());
+    }
 
-        if ( config.open.size == numValves ) {
-            config.timeSpentEle = 30;
-            config.timeSpentMe = 30;
-            if ( config.totalFlowToTime() > currMax ) {
-                currMax = config.totalFlowToTime();
-            }
-            continue;
-        }
+    if ( config.maxObtainable() <= maxFound ) {
+        return -1;
+    }
 
-        if ( config.maxObtainable() < currMax ) {
-            continue;
-        }
-        
-        const currRoomMe = graph.get(config.posMe);
-        const currRoomEle = graph.get(config.posEle);
-        if ( ( !config.open.has( currRoomMe.id ) || config.open.get(currRoomMe.id) > config.timeSpentMe + 1 ) && currRoomMe.flow > 0 ) {
-            var newConf : RoomConfig = new RoomConfig();
-            newConf.posMe = config.posMe;
-            newConf.posEle = config.posEle;
-            newConf.open = new Map<string, number>();
-            for ( var op of config.open ) {
-                newConf.open.set( op[0], op[1] );
-            }
-            newConf.open.set( currRoomMe.id, config.timeSpentMe + 1 );
-            newConf.timeSpentMe = config.timeSpentMe + 1;
-            newConf.timeSpentEle = config.timeSpentEle;
-            if (!cache.has( newConf.key())) {
-                queue.push(newConf);
-            }
-        }
-        if ( ( !config.open.has( currRoomEle.id ) || config.open.get(currRoomEle.id) > config.timeSpentEle + 1 )&& currRoomEle.flow > 0 ) {
-            var newConf : RoomConfig = new RoomConfig();
-            newConf.posMe = config.posMe;
-            newConf.posEle = config.posEle;
-            newConf.open = new Map<string, number>();
-            for ( var op of config.open ) {
-                newConf.open.set( op[0], op[1] );
-            }
-            newConf.open.set( currRoomEle.id, config.timeSpentEle + 1 );
-            newConf.timeSpentMe = config.timeSpentMe;
-            newConf.timeSpentEle = config.timeSpentEle + 1;
-            if (!cache.has( newConf.key())) {
-                queue.push(newConf);
-            }
-        }
-        // new configs: move to neighboring rooms
-        let myNeighbors = currRoomMe.neighbors;
-        if ( config.timeSpentMe >= 30 || config.open.size === numValves) {
-            myNeighbors = new Map<string, number>();
-        }
-        let eleNeighbors = currRoomEle.neighbors;
-        if ( config.timeSpentEle >= 30 || config.open.size === numValves) {
-            eleNeighbors = new Map<string, number>();
-        }
-        for ( const neigh1 of myNeighbors ) {
-            var nextNeigh1 : string = neigh1[0];
-            var newConf = new RoomConfig();
-            newConf.timeSpentMe = config.timeSpentMe + neigh1[1];
-            if ( newConf.timeSpentMe > 30 ) {
-                newConf.timeSpentMe = 30;   
-            }
-            newConf.posMe = nextNeigh1;
 
-            newConf.timeSpentEle = config.timeSpentEle;
-            newConf.posEle = config.posEle;
+    let currFlow = config.totalFlowToTime(30);
+    if (currFlow > maxFound) {
+        maxFound = currFlow;
+        maxConfig = config;
+    }
 
-            newConf.open = new Map<string, number>();
-            for ( var op of config.open ) {
-                newConf.open.set( op[0], op[1] );
-            }
-            if (!cache.has( newConf.key())) {
-                queue.push(newConf);
-            }
+    if ( ( config.timeSpentEle >= 30 && config.timeSpentMe >= 30 ) || config.open.size === numValves ) {
+        cache.set( config.key(), currFlow);
+        return currFlow;
+    }
+
+    let newConfigs = [];
+
+    if ( config.timeSpentMe < 30 ) {
+        if ( (!config.open.has(config.posMe) || config.open.get(config.posMe) > config.timeSpentMe + 1) && config.posMe !== 'AA' ) {
+            let newConfig = new RoomConfig();
+            newConfig.posMe = config.posMe;
+            newConfig.timeSpentMe = config.timeSpentMe + 1;
+            newConfig.posEle = config.posEle;
+            newConfig.timeSpentEle = config.timeSpentEle;
+            newConfig.open = new Map(config.open);
+            newConfig.open.set( config.posMe, config.timeSpentMe + 1 );
+            newConfigs.push( newConfig );
         }
-        for ( const neigh2 of eleNeighbors ) {
-            var nextNeigh2 : string = neigh2[0];
-            var newConf = new RoomConfig();
-            newConf.timeSpentMe = config.timeSpentMe;
-            newConf.posMe = config.posMe;
+    }
+    
+    if ( config.timeSpentEle < 30 ) {
+        if ( ( !config.open.has(config.posEle) || config.open.get(config.posEle) > config.timeSpentEle + 1) && config.posEle !== 'AA' ) {
+            let newConfig = new RoomConfig();
+            newConfig.posMe = config.posMe;
+            newConfig.timeSpentMe = config.timeSpentMe;
+            newConfig.posEle = config.posEle;
+            newConfig.timeSpentEle = config.timeSpentEle + 1;
+            newConfig.open = new Map(config.open);
+            newConfig.open.set( config.posEle, config.timeSpentEle + 1 );
+            newConfigs.push( newConfig );
+        }
+    }
+     
+    if ( config.timeSpentMe < 30 ) {
+        const neighs1 = config.sortByPotential(new Array(...graph.get(config.posMe).neighbors.keys()))
 
-            newConf.timeSpentEle = config.timeSpentEle + neigh2[1];
-            if ( newConf.timeSpentEle > 30 ) {
-                newConf.timeSpentEle = 30;   
-            }
-            newConf.posEle = nextNeigh2;
-
-            newConf.open = new Map<string, number>();
-            for ( var op of config.open ) {
-                newConf.open.set( op[0], op[1] );
-            }
-            if (!cache.has( newConf.key())) {
-                queue.push(newConf);
-            }
+        for ( const neigh of neighs1 ) {
+            let newConfig = new RoomConfig();
+            newConfig.posMe = neigh;
+            newConfig.timeSpentMe = Math.min(config.timeSpentMe + graph.get(config.posMe).neighbors.get(neigh), 30);
+            newConfig.posEle = config.posEle;
+            newConfig.timeSpentEle = config.timeSpentEle;
+            newConfig.open = new Map(config.open);
+            newConfigs.push( newConfig );
         }
     }
 
-    console.log( currMax );
+    if ( config.timeSpentEle < 30 ) {
+        const neighs2 = config.sortByPotential(new Array(...graph.get(config.posEle).neighbors.keys()));
+        for ( const neigh of neighs2 ) {
+            let newConfig = new RoomConfig();
+            newConfig.posMe = config.posMe;
+            newConfig.timeSpentMe = config.timeSpentMe;
+            newConfig.posEle = neigh;
+            newConfig.timeSpentEle = Math.min(config.timeSpentEle + graph.get(config.posEle).neighbors.get(neigh), 30);
+            newConfig.open = new Map(config.open);
+            newConfigs.push( newConfig );
+        }
+    }
+
+    var flow = -1;
+    for ( const newConfig of newConfigs ) {
+        var flowCand = runProcess(newConfig);
+        if ( flowCand > flow ) {
+            flow = flowCand;
+        }
+    }
+    if ( flow > -1 ) {
+        cache.set( config.key(), flow );
+    }
+    return flow;
 }
