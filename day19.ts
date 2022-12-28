@@ -2,10 +2,10 @@ import { time } from 'console';
 import * as fs from 'fs';
 import * as rd from 'readline'
 
-var reader = rd.createInterface(fs.createReadStream("/home/isa/projets/adventofcode/AoC2022/data/day19-test.txt"))
+var reader = rd.createInterface(fs.createReadStream("/home/isa/projets/adventofcode/AoC2022/data/day19.txt"))
 const regex = /Blueprint (\d+): Each ore robot costs (\d+) ore. Each clay robot costs (\d+) ore. Each obsidian robot costs (\d+) ore and (\d+) clay. Each geode robot costs (\d+) ore and (\d+) obsidian./
 
-let memo = new Map<string, number>();
+let currMaxGeo = 0;
 
 class Blueprint {
     id: number;
@@ -29,10 +29,10 @@ class Blueprint {
         this.maxOreCost = Math.max(this.costClayOre, this.costOreOre, this.costGeoOre, this.costObsOre);
     }
 
-    public getQuality() : number {
+    public getQuality( time : number ) : number {
         const conf = new Config();
         conf.bp = this;
-        const maxGeodes =  conf.getMaxGeodes();
+        const maxGeodes =  conf.getMaxGeodes( time );
         console.log( maxGeodes );
         return maxGeodes * this.id;
     }
@@ -71,144 +71,211 @@ class Config {
         return conf;
     }
 
-    public getMaxGeodes() : number {
-        if (memo.has(this.toString())) {
-            return memo.get(toString());
+    public clone(): Config {
+        const conf = new Config();
+        conf.bp = this.bp;
+        conf.oreBots = this.oreBots;
+        conf.clayBots = this.clayBots;
+        conf.obsBots = this.obsBots;
+        conf.geoBots = this.geoBots;
+        conf.ore = this.ore;
+        conf.clay = this.clay;
+        conf.obs = this.obs;
+        conf.geo = this.geo;
+        conf.time = this.time;
+        return conf;
+    }
+
+    public getMaxGeodes( time : number ) : number {
+        if ( this.time === time ) {
+            return this.geo;
         }
-        if ( this.time === 24 ) {
-            return this.geo + this.geoBots;
-        }
-        if ( !this.canBuildGeoBeforeEnd() ) {
-            return this.geo + this.geoBots * (24 - this.time + 1);
+        if ( this.time > time ) {
+            throw ( 'should not happen');
         }
 
-        let configs = [];
+        let confViaOre = this.nextOreBot(time);
+        let confViaClay = this.nextClayBot(time);
+        let confViaObs = this.nextObsBot(time);
+        let confViaGeo = this.nextGeoBot(time);
 
-        if ( this.obs >= this.bp.costGeoObs && this.ore >= this.bp.costGeoOre ) {
-            configs.push(this.buildGeoBot());
+        if ( confViaOre === null && confViaClay === null && confViaObs === null && confViaGeo === null ) {
+            return this.geo + (time - this.time) * this.geoBots;
         }
-        if ( this.bp.costGeoObs > this.obsBots + this.obs && this.ore >= this.bp.costObsOre && this.clay >= this.bp.costObsClay) {
-            configs.push(this.buildObsBot());
-        }
-        if ( this.bp.costObsClay > this.clayBots + this.clay && this.ore >= this.bp.costClayOre ) {
-            configs.push(this.buildClayBot());
-        }
-        if ( this.bp.maxOreCost > this.oreBots + this.ore && this.ore >= this.bp.costOreOre ) {
-            configs.push(this.buildOreBot());
-        }
-        configs.push(this.pause());
 
-        var maxGeo = 0;
-        for ( const config of configs ) {
-            var geo = config.getMaxGeodes();
-            if ( geo > maxGeo ) {
-                maxGeo = geo;
-            }
-            if (maxGeo > 10) {
-                console.log("pouet");
-            }
+        if ( this.clayBots === 0 ) {
+            let a = (confViaOre !== null) ? confViaOre.getMaxGeodes(time) : 0;
+            let b = (confViaClay !== null ) ? confViaClay.getMaxGeodes(time) : 0;
+            return Math.max(a, b);
         }
-        memo.set( this.toString(), maxGeo);
+
+        if ( this.obsBots === 0 ) {
+            let a = (confViaOre !== null) ? confViaOre.getMaxGeodes(time) : 0;
+            let b = (confViaClay !== null ) ? confViaClay.getMaxGeodes(time) : 0;
+            let c = (confViaObs !== null ) ? confViaObs.getMaxGeodes(time) : 0;
+            return Math.max(a, b, c);
+        }
+        
+        if ( this.obs >= this.bp.costGeoObs && this.ore >= this.bp.costGeoOre) {
+            return this.nextGeoBot(time).getMaxGeodes(time);
+        }
+
+        let optimGeo = this.geo;
+        let newGeo = this.geoBots;
+        for ( let i = 1; i <= time - this.time; i++) {
+            optimGeo += newGeo;
+            newGeo++;
+        }
+        if (optimGeo < currMaxGeo) {
+            return 0;
+        }
+
+        let maxGeo = this.geo;
+        if (confViaOre !== null ) {
+            maxGeo = Math.max(maxGeo, confViaOre.getMaxGeodes(time));
+        }
+        if ( confViaClay !== null) {
+            maxGeo = Math.max(maxGeo, confViaClay.getMaxGeodes(time));
+        }
+        if ( confViaGeo !== null ) {
+            maxGeo = Math.max(maxGeo, confViaGeo.getMaxGeodes(time));
+        }
+        if ( confViaObs !== null) {
+            maxGeo = Math.max(maxGeo, confViaObs.getMaxGeodes(time));
+        }
+
+        if ( currMaxGeo < maxGeo) {
+           currMaxGeo = maxGeo;
+        }
         return maxGeo;
     }
 
-    private canBuildGeoBeforeEnd() : boolean {
-        let currMaxObs = this.obs + (24 - this.time) * this.obsBots;
-        let currMaxOre = this.ore + (24 - this.time) * this.oreBots;
-        if ( currMaxObs >= this.bp.costGeoObs && currMaxOre >= this.bp.costGeoOre ) {
-            return true;
+    private nextOreBot(time : number) : Config {
+        let confViaOre = this.clone();
+        if ( confViaOre.oreBots >= confViaOre.bp.maxOreCost ) {
+            confViaOre = null;
+        } else {
+            while (confViaOre.ore < confViaOre.bp.costOreOre ) {
+                confViaOre = confViaOre.pause();
+            }
+            confViaOre = confViaOre.buildOreBot();
+            if (confViaOre.time > time) {
+                confViaOre = null;
+            }
         }
-        if ( this.obsBots === 0 && !this.canBuildObsBeforeEnd()) {
-            return false;
-        }
-        if ( currMaxObs < this.bp.costGeoObs && !this.canBuildObsBeforeEnd()) {
-            return false;
-        }
-        if ( currMaxOre < this.bp.costGeoOre && !this.canBuildOreBeforeEnd()) {
-            return false;
-        }
-        return true;
+        return confViaOre;
     }
 
-    private canBuildObsBeforeEnd() : boolean {
-        let currMaxOre = this.ore + (24 - this.time) * this.oreBots;
-        let currMaxClay = this.clay + (24 - this.time) * this.clayBots;
-        if (currMaxClay >= this.bp.costObsClay && currMaxOre >= this.bp.costObsOre ) {
-            return true;
+    private nextClayBot(time : number) : Config {
+        let confViaClay = this.clone();
+        if ( confViaClay.clayBots >= confViaClay.bp.costObsClay ) {
+            confViaClay = null;
+        } else {
+            while (confViaClay.ore < confViaClay.bp.costClayOre ) {
+                confViaClay = confViaClay.pause();
+            }
+            confViaClay = confViaClay.buildClayBot();
+            if (confViaClay.time > time ) {
+                confViaClay = null;
+            }
         }
-        if ( currMaxClay < this.bp.costObsClay && !this.canBuildClayBeforeEnd()) {
-            return false;
-        }
-        if ( currMaxOre < this.bp.costObsOre && !this.canBuildOreBeforeEnd()) {
-            return false;
-        }
-        return true;
+        return confViaClay;
     }
 
-    private canBuildClayBeforeEnd() : boolean {
-        let currMaxOre = this.ore + (24 - this.time) * this.oreBots;
-        if ( currMaxOre < this.bp.costClayOre && !this.canBuildOreBeforeEnd()) {
-            return false;
+    private nextObsBot(time : number) : Config {
+        let confViaObs = this.clone();
+        if ( confViaObs.obsBots >= confViaObs.bp.costGeoObs ) {
+            confViaObs = null;
+        } else {
+            if ( confViaObs.clayBots > 0 ) {
+                while ( confViaObs.clay < confViaObs.bp.costObsClay || confViaObs.ore < confViaObs.bp.costObsOre ) {
+                    confViaObs = confViaObs.pause();
+                }
+                confViaObs = confViaObs.buildObsBot();
+                if (confViaObs.time > time) {
+                    confViaObs = null; 
+                }
+            } else {
+               return null;
+            }
         }
-        return true;
+        return confViaObs;
     }
 
-    private canBuildOreBeforeEnd() : boolean {
-        let currMaxOre = this.ore + (24 - this.time) * this.oreBots;
-        if (currMaxOre < this.bp.costOreOre) {
-            return false;
+    private nextGeoBot(time : number) : Config {
+        let confViaGeo = this.clone();
+        if ( confViaGeo.obsBots > 0 ) {
+            while ( confViaGeo.obs < confViaGeo.bp.costGeoObs || confViaGeo.ore < confViaGeo.bp.costGeoOre ) {
+                confViaGeo = confViaGeo.pause();
+            }
+            confViaGeo = confViaGeo.buildGeoBot();
+            if (confViaGeo.time > time) {
+                confViaGeo = null; 
+            }
+        } else {
+            return null;
         }
-        return true;
+        return confViaGeo;
     }
 
     private pause() : Config {
         let newConf = this.nextConfig();
-        console.log(newConf.toString());
         return newConf;
     }
 
     private buildOreBot() : Config {
+        if ( this.bp.costOreOre > this.ore ) {
+            throw "Cannot build ore bot";
+        }
         let newConf = this.nextConfig();
         newConf.oreBots++;
         newConf.ore -= newConf.bp.costOreOre;
-        console.log(newConf.toString());
         return newConf;
     }
 
     private buildClayBot() : Config {
+        if ( this.bp.costClayOre > this.ore ) {
+            throw "Cannot build clay bot";
+        }
         let newConf = this.nextConfig();
         newConf.clayBots++;
         newConf.ore -= newConf.bp.costClayOre;
-        console.log(newConf.toString());
         return newConf;
     }
 
     private buildObsBot() : Config {
+        if ( this.bp.costObsClay > this.clay || this.bp.costObsOre > this.ore ) {
+            throw "Cannot build obs bot";
+        }
         let newConf = this.nextConfig();
         newConf.obsBots++;
         newConf.ore -= newConf.bp.costObsOre;
         newConf.clay -= newConf.bp.costObsClay;
-        console.log(newConf.toString());
         return newConf;
     }
 
     private buildGeoBot() : Config {
+        if ( this.bp.costGeoObs > this.obs || this.bp.costGeoOre > this.ore ) {
+            throw "cannot build geo bot";
+        }
         let newConf = this.nextConfig();
         newConf.geoBots++;
         newConf.ore -= newConf.bp.costGeoOre;
         newConf.obs -= newConf.bp.costGeoObs;
-        console.log(newConf.toString());
         return newConf;
     }
 }
 
-reader.on("line", (l: string) => {
-    memo = new Map<string, number>();
-    const bp = new Blueprint(l);
+let sum = 0;
 
-    const quality = bp.getQuality();
+reader.on("line", (l: string) => {
+    const bp = new Blueprint(l);
+    currMaxGeo = 0;
+    const quality = bp.getQuality( 24 );
     console.log(quality);
+    sum += quality;
 });
 
 reader.on("close", () => {
+    console.log(sum);
 });
