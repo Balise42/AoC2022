@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as rd from 'readline'
 
-var reader = rd.createInterface(fs.createReadStream("D:\\Home\\projects\\adventcalendar\\2022\\data\\day21.txt"))
+var reader = rd.createInterface(fs.createReadStream("/home/isa/projets/adventofcode/AoC2022/data/day21-test.txt"))
 
 const regex = /([a-z]{4}): (?:(\d+)|([a-z]{4}) ([+\-\/*]) ([a-z]{4}))/
 

@@ -30,11 +30,14 @@ class Blueprint {
     }
 
     public getQuality( time : number ) : number {
+        return this.getGeodes(time) * this.id;
+    }
+
+    public getGeodes( time : number ) : number {
         const conf = new Config();
         conf.bp = this;
         const maxGeodes =  conf.getMaxGeodes( time );
-        console.log( maxGeodes );
-        return maxGeodes * this.id;
+        return maxGeodes;
     }
 }
 
@@ -267,15 +270,22 @@ class Config {
 }
 
 let sum = 0;
+let numPart2 = 0;
+let part2Prod = 1;
 
 reader.on("line", (l: string) => {
     const bp = new Blueprint(l);
     currMaxGeo = 0;
     const quality = bp.getQuality( 24 );
-    console.log(quality);
+    if ( numPart2 < 3 ) {
+        numPart2++;
+        part2Prod *= bp.getGeodes(32);
+    }
+
     sum += quality;
 });
 
 reader.on("close", () => {
     console.log(sum);
+    console.log(part2Prod);
 });
