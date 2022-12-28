@@ -147,7 +147,7 @@ reader.on('close', () => {
     console.log(runProcess( initrc1 ));
 
     cache = new Map<string, number>();
-    maxFound = 0;
+
     const initrc2 = new RoomConfig();
     initrc2.timeSpentEle = 4;
     initrc2.timeSpentMe = 4;
@@ -158,6 +158,7 @@ reader.on('close', () => {
 
 let cache = new Map<string, number>();
 let bestConfig = null;
+let cacheHits = 0;
 
 function runProcess( config : RoomConfig ) : number {
     if ( config.maxObtainable() < maxFound ) {
@@ -168,7 +169,7 @@ function runProcess( config : RoomConfig ) : number {
     if (currFlow > maxFound) {
         maxFound = currFlow;
         bestConfig = config;
-        console.log(bestConfig.key(), currFlow);
+        console.log(bestConfig.key(), currFlow, cacheHits);
     }
 
     if ( ( config.timeSpentEle >= 30 && config.timeSpentMe >= 30 ) || config.open.size === numValves ) {
@@ -201,7 +202,9 @@ function runProcess( config : RoomConfig ) : number {
             newConf.posMe = config.posMe;
             newConf.timeSpentMe = config.timeSpentMe;
             newConf.flowSoFar = newConf.totalFlowToTime(30);
-            newConfigs.push( newConf );
+            if ( newConf.timeSpentEle <= 30 ) {
+                newConfigs.push( newConf );
+            }
         }
         if ( config.timeSpentMe < 30 ) {
             let newConf = new RoomConfig();
@@ -216,7 +219,9 @@ function runProcess( config : RoomConfig ) : number {
             newConf.posEle = config.posEle;
             newConf.timeSpentEle = config.timeSpentEle;
             newConf.flowSoFar = newConf.totalFlowToTime(30);
-            newConfigs.push( newConf );
+            if (newConf.timeSpentMe <= 30) {
+                newConfigs.push( newConf );
+            }
         }
     }
 
@@ -225,15 +230,16 @@ function runProcess( config : RoomConfig ) : number {
     var flow = 0;
     for ( const newConfig of newConfigs ) {
         var flowCand;
-        if ( cache.has( newConfig.key()) ) {
+        /*if ( cache.has( newConfig.key()) ) {
             var cached = newConfig.totalFlowToTime(Math.min(newConfig.timeSpentMe, newConfig.timeSpentEle)) + cache.get(newConfig.key());
             flowCand = cached;
-        } else {
+            cacheHits++;
+        } else {*/
             flowCand = runProcess(newConfig);
-            if (newConfig.timeSpentEle > 20 && newConfig.timeSpentMe > 20 ) {
+            /*if (newConfig.timeSpentEle > 15 && newConfig.timeSpentMe > 15 ) {
                 cache.set(newConfig.key(), flowCand - newConfig.totalFlowToTime(Math.min(newConfig.timeSpentMe, newConfig.timeSpentEle)));
-            }
-        }
+            }*/
+        //}
         if ( flowCand > flow ) {
             flow = flowCand;
         }
